@@ -166,13 +166,27 @@ def launch():
 
         try:
             if arguments[0] == 'delete_all':
-                delete_all(configuration, arguments[1], arguments[2], arguments[3])
+                print(delete_all(configuration,
+                                 arguments[1],
+                                 arguments[2],
+                                 arguments[3]))
             elif arguments[0] == 'delete_older':
-                delete_older(configuration, arguments[1], arguments[2], arguments[3], arguments[4])
+                print(delete_older(configuration,
+                                   arguments[1],
+                                   arguments[2],
+                                   arguments[3],
+                                   arguments[4]))
             elif arguments[0] == 'mark_empty':
-                mark_empty(configuration, arguments[1], arguments[2], arguments[3], arguments[4])
+                print(mark_empty(configuration,
+                                 arguments[1],
+                                 arguments[2],
+                                 arguments[3],
+                                 arguments[4]))
             elif arguments[0] == 'delete_empty':
-                delete_empty(configuration, arguments[1], arguments[2], arguments[3])
+                print(delete_empty(configuration,
+                                   arguments[1],
+                                   arguments[2],
+                                   arguments[3]))
             else:
                 print('invalid commande: {}'.format(arguments[0]))
         except requests.exceptions.RequestException as exception:
