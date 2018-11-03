@@ -27,35 +27,30 @@ import configparser
 import re
 import requests
 
-def find(configuration, cell, selector, read_token):
+def find(configuration, selector):
     """
     This function will find gts matching the specified selector.
     """
-    result = set()
-
-    response = requests.get(configuration[cell]['find_endpoint'],
-                            headers={'X-Warp10-Token': read_token},
+    response = requests.get(configuration['find_endpoint'],
+                            headers={'X-Warp10-Token': configuration['read_token']},
                             params={'selector': selector,
                                     'sortmeta': 'true',
                                     'showattr': 'true',
                                     'format': 'fulltext'},
                             stream=True)
     response.raise_for_status()
-    for line in response.iter_lines():
-        result.add(str(line, 'utf-8'))
+    if response.encoding is None:
+        response.encoding = 'utf-8'
+    return response.iter_lines()
 
-    return result
 
-
-def fetch(configuration, cell, selector, read_token):
+def fetch(configuration, selector):
     """
     This function will fetch gts matching the specified selector
     with at least 1 point.
     """
-    result = set()
-
-    response = requests.get(configuration[cell]['fetch_endpoint'],
-                            headers={'X-Warp10-Token': read_token},
+    response = requests.get(configuration['fetch_endpoint'],
+                            headers={'X-Warp10-Token': configuration['read_token']},
                             params={'selector': selector,
                                     'now': '9223372036854775807',
                                     'timespan': '-1',
@@ -64,75 +59,84 @@ def fetch(configuration, cell, selector, read_token):
                                     'format': 'fulltext'},
                             stream=True)
     response.raise_for_status()
-    for line in response.iter_lines():
-        result.add(str(line.split()[1], 'utf-8'))
+    if response.encoding is None:
+        response.encoding = 'utf-8'
+    return response.iter_lines()
 
-    return result
 
-
-def delete_older(configuration, cell, selector, write_token, instant):
+def delete_older(configuration, selector, instant):
     """
     This function will delete any datapoint in a serie matching
     the specified selector and older than the specified instant.
     """
-    response = requests.get(configuration[cell]['delete_endpoint'],
-                            headers={'X-Warp10-Token': write_token},
+    response = requests.get(configuration['delete_endpoint'],
+                            headers={'X-Warp10-Token': configuration['write_token']},
                             params={'selector': selector,
                                     'end': instant,
-                                    'start': '-9223372036854775808'})
+                                    'start': '-9223372036854775808'},
+                            stream=True)
     response.raise_for_status()
+    if response.encoding is None:
+        response.encoding = 'utf-8'
+    return response.iter_lines()
 
-    return response.text
 
-
-def delete_all(configuration, cell, selector, write_token):
+def delete_all(configuration, selector):
     """
     This function will delete any serie matching the specified
     selector.
     """
-    response = requests.get(configuration[cell]['delete_endpoint'],
-                            headers={'X-Warp10-Token': write_token},
-                            params={'selector': selector, 'deleteall': 'true'})
+    response = requests.get(configuration['delete_endpoint'],
+                            headers={'X-Warp10-Token': configuration['write_token']},
+                            params={'selector': selector, 'deleteall': 'true'},
+                            stream=True)
     response.raise_for_status()
+    if response.encoding is None:
+        response.encoding = 'utf-8'
+    return response.iter_lines()
 
-    return response.text
 
-
-def mark_empty(configuration, cell, selector, read_token, write_token):
+def mark_empty(configuration, selector):
     """
     This function will mark with an attribute any empty gts matching
     the specified selector.
     """
-    find_result = find(configuration, cell, selector, read_token)
-    fetch_result = fetch(configuration, cell, selector, read_token)
+    empty = set()
 
-    diff = find_result.difference(fetch_result)
+    find_it = find(configuration, selector)
+    for line in find_it:
+        empty.add(str(line, 'utf-8'))
 
-    meta_orders = []
-    for entry in diff:
-        meta_orders.append(re.sub(r'{[^{}]*}$', '{wdlcm=empty}', entry))
+    fetch_it = fetch(configuration, selector)
+    for line in fetch_it:
+        empty.remove(str(line.split()[1], 'utf-8'))
 
-    response = requests.post(configuration[cell]['meta_endpoint'],
-                             headers={'X-Warp10-Token': write_token},
-                             data='\n'.join(meta_orders))
+    meta = []
+    for entry in empty:
+        meta.append(re.sub(r'{[^{}]*}$', '{wdlcm=empty}', entry))
+
+    response = requests.post(configuration['meta_endpoint'],
+                             headers={'X-Warp10-Token': configuration['write_token']},
+                             data='\n'.join(meta))
     response.raise_for_status()
+    if response.encoding is None:
+        response.encoding = 'utf-8'
+    return response.iter_lines()
 
-    return
-
-def delete_empty(configuration, cell, read_token, write_token):
+def delete_empty(configuration):
     """
     This function will delete any gts marked as empty.
     """
     selector = '~.*{wdlcm=empty}'
     # Find to check if empty series are really empty
-    fetch_result = fetch(configuration, cell, selector, read_token)
-    if fetch_result:
+    fetch_it = fetch(configuration, selector)
+    for _ in fetch_it:
         raise requests.exceptions.RequestException("""
                                Failed to delete series marked as empty
                                as some of them still contains datapoints.
                                """)
 
-    return delete_all(configuration, cell, selector, write_token)
+    return delete_all(configuration, selector)
 
 def launch():
     """
@@ -164,31 +168,34 @@ def launch():
         print('-- Please write a command down (Ctrl+D to quit).')
         arguments = line.split()
 
+        command = arguments[0]
+        application = arguments[1]
+        selector = arguments[2]
+        instant = arguments[3]
+
+        print('command: {}'.format(command))
+        print('application: {}'.format(application))
+        print('selector: {}'.format(selector))
+        print('instant: {}'.format(instant))
+
         try:
-            if arguments[0] == 'delete_all':
-                print(delete_all(configuration,
-                                 arguments[1],
-                                 arguments[2],
-                                 arguments[3]))
-            elif arguments[0] == 'delete_older':
-                print(delete_older(configuration,
-                                   arguments[1],
-                                   arguments[2],
-                                   arguments[3],
-                                   arguments[4]))
-            elif arguments[0] == 'mark_empty':
-                print(mark_empty(configuration,
-                                 arguments[1],
-                                 arguments[2],
-                                 arguments[3],
-                                 arguments[4]))
-            elif arguments[0] == 'delete_empty':
-                print(delete_empty(configuration,
-                                   arguments[1],
-                                   arguments[2],
-                                   arguments[3]))
+            result_it = None
+            if command == 'find':
+                result_it = find(configuration[application], selector)
+            elif command == 'delete_all':
+                result_it = delete_all(configuration[application], selector)
+            elif command == 'delete_older':
+                result_it = delete_older(configuration[application], selector, instant)
+            elif command == 'mark_empty':
+                result_it = mark_empty(configuration[application], selector)
+            elif command == 'delete_empty':
+                result_it = delete_empty(configuration[application])
             else:
                 print('invalid commande: {}'.format(arguments[0]))
+
+            for result in result_it:
+                print(result)
+
         except requests.exceptions.RequestException as exception:
             print(exception)
             sys.exit(1)
