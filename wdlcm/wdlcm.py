@@ -26,6 +26,7 @@ import argparse
 import configparser
 import re
 import requests
+import logging
 
 def find(configuration, selector):
     """
@@ -169,7 +170,7 @@ def launch():
         arguments = line.split()
 
         if len(arguments) < 2:
-            print('Not enougth arguments.')
+            logging.warning('Not enougth arguments.')
             continue
 
         command = arguments[0]
@@ -183,13 +184,10 @@ def launch():
             instant = arguments[3]
 
         if application not in configuration:
-            print('Application: {} not found.'.format(application))
+            logging.warning('Application: {} not found.'.format(application))
             continue
 
-        print('command: {}'.format(command))
-        print('application: {}'.format(application))
-        print('selector: {}'.format(selector))
-        print('instant: {}'.format(instant))
+        logging.info('command: {}, application: {}, selector: {}, instant: {}.'.format(command, application, selector, instant))
 
         try:
             result_it = None
@@ -204,14 +202,14 @@ def launch():
             elif command == 'delete_empty':
                 result_it = delete_empty(configuration[application])
             else:
-                print('invalid commande: {}'.format(arguments[0]))
+                logging.warning('invalid commande: {}'.format(arguments[0]))
                 continue
 
             for result in result_it:
                 print(result)
 
         except requests.exceptions.RequestException as exception:
-            print(exception)
+            logging.exception('Request failed.')
             sys.exit(1)
 
 if __name__ == '__main__':
