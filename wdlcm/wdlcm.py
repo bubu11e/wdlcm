@@ -168,10 +168,23 @@ def launch():
         print('-- Please write a command down (Ctrl+D to quit).')
         arguments = line.split()
 
+        if len(arguments) < 2:
+            print('Not enougth arguments.')
+            continue
+
         command = arguments[0]
         application = arguments[1]
-        selector = arguments[2]
-        instant = arguments[3]
+        selector = '~.*{}'
+        instant = '0'
+
+        if len(arguments) >= 3:
+            selector = arguments[2]
+        if len(arguments) >= 4:
+            instant = arguments[3]
+
+        if application not in configuration:
+            print('Application: {} not found.'.format(application))
+            continue
 
         print('command: {}'.format(command))
         print('application: {}'.format(application))
@@ -192,6 +205,7 @@ def launch():
                 result_it = delete_empty(configuration[application])
             else:
                 print('invalid commande: {}'.format(arguments[0]))
+                continue
 
             for result in result_it:
                 print(result)
